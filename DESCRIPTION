@@ -1,13 +1,25 @@
 Package: misc
-Title: What the Package Does (One Line, Title Case)
+Title: Misc package for personal functions
 Version: 0.0.0.9000
 Authors@R: 
-    person(given = "First",
-           family = "Last",
+    person(given = "Zhiwei",
+           family = "Rong",
            role = c("aut", "cre"),
-           email = "first.last@example.com",
+           email = "18845728185@163.com",
            comment = c(ORCID = "YOUR-ORCID-ID"))
-Description: What the package does (one paragraph).
-License: What license it uses
+Description: Some useful functions for dat-to-day work.
+License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
+RoxygenNote: 7.0.2
+Suggests: 
+    testthat (>= 2.1.0),
+    knitr,
+    rmarkdown
+Imports: 
+    dplyr,
+    purrr,
+    rlang,
+    tibble,
+    car
+VignetteBuilder: knitr

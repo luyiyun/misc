@@ -1,0 +1,72 @@
+---
+title: "tutorial"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{tutorial}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r}
+knitr::opts_chunk$set(
+  collapse = FALSE,
+  # comment = "#>",
+  warning = FALSE
+)
+```
+
+载入使用的包:
+
+```{r setup}
+library(misc)
+library(dplyr)
+```
+
+示例数据集：
+
+```{r}
+dat <- mtcars %>% mutate(cyl=factor(cyl), vs=factor(vs), am=factor(am), gear=factor(gear), carb=factor(carb))
+dat %>% head()
+```
+
+# 描述性统计分析
+
+```{r}
+desc_res <- dat %>% desc_baseline(vs)
+print(class(desc_res))
+print(str(desc_res))
+```
+
+使用`publish`函数来将这个储存有描述性统计内容的对象生成为一个可发表的表格：
+
+```{r}
+desc_res %>% publish(digit = 3)
+```
+
+
+# 单变量统计分析
+
+```{r}
+st_res <- dat %>% stats_SingleTest(gear)
+st_res %>% publish()
+```
+
+# 两两比较
+
+```{r}
+st_res %>% stats_PairwiseTest() %>% publish()
+```
+
+
+另一种做法：
+
+```{r}
+dat %>% stats_PairwiseTest(gear) %>% publish()
+```
+
+# 相关性分析
+
+```{r}
+dat %>% stats_Correlation() %>% publish()
+```
+
