@@ -1,6 +1,6 @@
 Package: misc
-Title: Misc package for personal functions
-Version: 0.0.0.9000
+Title: Misc package for statistical analysis
+Version: 1.0.0.0000
 Authors@R: 
     person(given = "Zhiwei",
            family = "Rong",
@@ -17,9 +17,11 @@ Suggests:
     knitr,
     rmarkdown
 Imports: 
+    car,
+    MASS,
     dplyr,
-    purrr,
     rlang,
+    stringr,
     tibble,
     car
 VignetteBuilder: knitr
