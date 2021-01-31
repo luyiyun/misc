@@ -13,7 +13,7 @@ test_that("the names of elements of result are right", {
 })
 
 test_that("the classes of elements of result are right", {
-  expect_equal(unname(sapply(res$main, class)), rep("data.frame", length(res$main)))
+  expect_equal(unname(sapply(res$main, class)), c(rep("data.frame", 6), rep("list", 4)))
   for (s in c("all", "row", "col")) {
     res2 <- dat %>% desc_baseline(cyl, .fct_prob = s)
     expect_equal(unname(sapply(res2$main, class)), c(rep("data.frame", 6), rep("list", 4)))

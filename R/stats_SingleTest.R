@@ -4,8 +4,8 @@
 #' @param group The group variable unquoted name.
 #' @param ... One or more unquoted expressions separated by commas. If none, use every variables else.
 #' @param .desc Logical, whether calculate \code{desc_baseline} object.
-#' @param .num_method Character, "auto", "t", "anova", "wilcox", "kwh". If \code{nlevels(group)} > 2 and "t" or
-#' "wilcox" are chosen, a warning will be throwed and the parameter will be replaced by "anova" or "kwh". Default
+#' @param .num_method Character, "auto", "t", "anova", "wilcox", "kruskal". If \code{nlevels(group)} > 2 and "t" or
+#' "wilcox" are chosen, a warning will be throwed and the parameter will be replaced by "anova" or "kruskal". Default
 #' is "auto", the test method of numeric variables will be decided by \code{.check_NE}. The "t" means t test with Welch
 #' (or Satterthwaite) approximation of the degrees of freedom.
 #' @param .fct_method Character, "auto", "chisq", "fisher". Default is "auto", decided by \code{.check_chisq}.
@@ -31,79 +31,98 @@
 #' stats_SingleTest(iris, Species)
 #' stats_SingleTest(iris, Species, .desc = FALSE)
 stats_SingleTest <- function(
-  dat, group, ..., .desc = TRUE, .num_method = "auto", .fct_method = "auto",
-  .check_NE_args = list(), .desc_baseline_args = list()
+  dat, group, ...,
+  .desc = TRUE,
+  .num_method = "auto",
+  .fct_method = "auto",
+  .check_NE_args = list(),
+  .desc_baseline_args = list()
 )
 {
-  preprocess <- select_params(dat, !!enquo(group), ...)
+  preprocess <- .select_params(dat, !!enquo(group), ...)
   group <- preprocess[[1]]
   vars <- preprocess[[2]]
   .stats_SingleTest(vars, group, .desc, .num_method, .fct_method, .check_NE_args, .desc_baseline_args)
 }
 
-.stats_SingleTest <- function(vars, group, .desc, .num_method, .fct_method, .check_NE_args, .desc_baseline_args)
+.stats_SingleTest <- function(
+  vars, group,
+  .desc,
+  .num_method,
+  .fct_method,
+  .check_NE_args,
+  .desc_baseline_args
+)
 {
-  .num_method <- match.arg(.num_method, c("auto", "t", "welch", "anova", "wilcox", "kwh"))
+  .num_method <- match.arg(.num_method, c("auto", "t", "welch", "anova", "wilcox", "kruskal"))
   .fct_method <- match.arg(.fct_method, c("auto", "chisq", "fisher"))
   nl <- nlevels(group)
   if (nl > 2 & .num_method %in% c("t", "welch", "wilcox")) {
     old_meth <- .num_method
-    new_meth <- ifelse(.num_method == "t", "anova", "kwh")
-    warning(sprintf("The number of categories of group more than 2, we should use %s, not %s", new_meth, old_meth))
+    new_meth <- ifelse(.num_method %in% c("t", "welch"), "anova", "kwh")
+    warning(sprintf("The number of categories of group more than 2, you should use %s, not %s", new_meth, old_meth))
     .num_method <- new_meth
   }
 
   .default_check_NE_args <- list(
-    group = group, vars = vars, .N = TRUE, .E = TRUE,
-    .Nthre = 0.1, .Ethre = 0.1, .Ntest_object="every"
+    group = group,
+    vars = vars,
+    .N = TRUE,
+    .E = TRUE,
+    .Nthre = 0.1,
+    .Ethre = 0.1,
+    .Ntest_object="every"
   )
   for (n in names(.check_NE_args)) {
     .default_check_NE_args[[n]] <- .check_NE_args[[n]]
   }
 
   # 1. 先去判断每个变量应该使用的统计方法
-  use_methods <- structure(rep(NA_character_, ncol(vars)), names = names(vars))
+  use_methods <- structure(
+    rep(NA_character_, ncol(vars)),
+    names = names(vars)
+  )
   if (.num_method == "auto") {
     conti_methods <- do.call(.check_NE, .default_check_NE_args)$methods
     use_methods <- ifelse(is.na(conti_methods), use_methods, conti_methods)
   } else {
-    for (i in seq_along(use_methods)) {
-      if (is.numeric(vars[[i]])) {
-        use_methods[i] <- .num_method
-      }
-    }
+    use_methods <- ifelse(sapply(vars, is.numeric), .num_method, use_methods)
   }
   if (.fct_method == "auto") {
     fct_methods <- .check_chisq(group, vars)$methods
     use_methods <- ifelse(is.na(fct_methods), use_methods, fct_methods)
   } else {
-    for (i in seq_along(use_methods)) {
-      if (is.factor(vars[[i]])) {
-        use_methods[i] <- .fct_method
-      }
-    }
+    use_methods <- ifelse(sapply(vars, is.numeric), .fct_method, use_methods)
   }
 
   # 2. 对照需要使用的方法，进行分别进行统计学检验
-  main <- list()
-  var_names <- names(vars)
-  for (i in seq_along(vars)) {
-    v <- vars[[i]]
-    main[[var_names[i]]] <- switch(use_methods[i],
-                 chisq = chisq_test(v, group),
-                 fisher = fisher_test(v, group),
-                 t = t_test(v, group),
-                 welch = t_test(v, group, TRUE),
-                 anova = anova_test(v, group),
-                 wilcox = wilcox_test(v, group),
-                 kruskal = kwh_test(v, group))
-  }
+  main <- mapply(
+    function(v, m) {
+      switch(
+        m,
+        chisq = chisq_test(v, group),
+        fisher = fisher_test(v, group),
+        t = t_test(v, group),
+        welch = t_test(v, group, TRUE),
+        anova = anova_test(v, group),
+        wilcox = wilcox_test(v, group),
+        kruskal = kwh_test(v, group)
+      )
+    },
+    vars, use_methods,
+    SIMPLIFY = FALSE, USE.NAMES = TRUE
+  )
 
   # 3. 将其他的一些内容加入其中，将结果转换成stats_SingleTest对象并返回
   if (.desc) {
     .default_desc_baseline_args <- list(
-      group = group, vars = vars, .num_desc_type = "auto", .num_margin = TRUE,
-      .fct_margin = "all", .fct_prob = "col", .check_NE_args = list()
+      group = group,
+      vars = vars,
+      .num_desc_type = "auto",
+      .num_margin = TRUE,
+      .fct_margin = "all",
+      .fct_prob = "col",
+      .check_NE_args = list()
     )
     for (n in names(.desc_baseline_args)) {
       .default_desc_baseline_args[[n]] <- .desc_baseline_args[[n]]
@@ -114,7 +133,13 @@ stats_SingleTest <- function(
   }
 
   structure(
-    list(main = main, test_methods=use_methods, desc = desc, group = group, vars = vars),
+    list(
+      main = main,
+      test_methods = use_methods,
+      desc = desc,
+      group = group,
+      vars = vars
+    ),
     class = "stats_SingleTest"
   )
 }

@@ -21,11 +21,15 @@ stats_Correlation <- function(dat, ..., .method = "spearman")
 }
 
 .stats_Correlation <- function(use_dat, .method) {
-  use_dat <- as.data.frame(purrr::map(use_dat, as.numeric))
+  use_dat <- as.data.frame(lapply(use_dat, as.numeric))
   nc <- ncol(use_dat)
   res <- structure(
-    matrix(NA_real_, nrow = nc, ncol = nc,
-           dimnames = list(names(use_dat), names(use_dat))),
+    matrix(
+      NA_real_,
+      nrow = nc,
+      ncol = nc,
+      dimnames = list(names(use_dat),names(use_dat))
+    ),
     class = c("stats_Correlation", "matrix")
   )
   for (i in seq_len(nc)) {

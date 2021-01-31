@@ -27,7 +27,7 @@
 #' # test
 #' dat %>% check_chisq(cyl)
 check_chisq <- function(dat, group, ...) {
-  preprocess <- select_params(dat, !!enquo(group), ...)
+  preprocess <- .select_params(dat, !!enquo(group), ...)
   group <- preprocess[[1]]
   vars <- preprocess[[2]]
   .check_chisq(group, vars)
@@ -53,8 +53,8 @@ check_chisq <- function(dat, group, ...) {
     #   和names(vars)是一致的。
     if (is.factor(v)) {
       res <- .check_chisq_one(group, v)
-      methods[names(vars)[i]] <- res[[1]]
-      expected[[names(vars)[i]]] <- res[[2]]
+      methods[names(vars)[i]] <- res[["method"]]
+      expected[[names(vars)[i]]] <- res[["expected"]]
     } else {
       expected[[names(vars)[i]]] <- NA
     }
@@ -66,8 +66,7 @@ check_chisq <- function(dat, group, ...) {
 }
 
 .check_chisq_one <- function(group, v) {
-  tab <- table(v, group)
-  chisq.fit <- chisq.test(tab)
+  chisq.fit <- chisq.test(v, group)
   expected <- as.vector(chisq.fit$expected)
 
   res <- "chisq"
@@ -81,5 +80,5 @@ check_chisq <- function(dat, group, ...) {
       res <- "fisher"
     }
   }
-  list(res, chisq.fit$expected)
+  list(method = res, expected = chisq.fit$expected)
 }

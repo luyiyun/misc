@@ -26,7 +26,7 @@ test_that("the structure of result is right", {
   expect_setequal(names(res1), c(exp_names, "logic_N", "logic_E", "pvalue_N", "pvalue_E"))
   expect_setequal(names(res2), c(exp_names, "logic_E", "pvalue_E"))
   expect_setequal(names(res3), c(exp_names, "logic_N", "pvalue_N"))
-  expect_is(res1$metheds, "character")
+  expect_is(res1$methods, "character")
   expect_is(res1$logic_N, "matrix")
   expect_is(res1$logic_E, "logical")
   expect_is(res1$pvalue_N, "matrix")

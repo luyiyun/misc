@@ -2,21 +2,27 @@
 % Please edit documentation in R/publish.R
 \name{publish}
 \alias{publish}
+\alias{publish.list}
 \alias{publish.desc_baseline}
 \alias{publish.stats_SingleTest}
 \alias{publish.stats_PairwiseTest}
 \alias{publish.stats_Correlation}
+\alias{publish.stats_MultiTest}
 \title{Convert some objects from 'misc' package to a dataframe what can be considered as publish tables}
 \usage{
 publish(x, ...)
 
+\method{publish}{list}(x, ...)
+
 \method{publish}{desc_baseline}(x, digit = 2)
 
-\method{publish}{stats_SingleTest}(x, digit = 2)
+\method{publish}{stats_SingleTest}(x, digit = 2, asterisk = TRUE)
 
 \method{publish}{stats_PairwiseTest}(x, digit = 2)
 
 \method{publish}{stats_Correlation}(x, digit = 2)
+
+\method{publish}{stats_MultiTest}(x, digit = 2)
 }
 \arguments{
 \item{x}{desc_baseline, stats_SingleTest or stats_PairwiseTest object.}

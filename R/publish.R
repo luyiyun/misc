@@ -13,17 +13,44 @@ publish <- function(x, ...) {
   UseMethod("publish")
 }
 
+#' @rdname publish
+#' @export
+publish.list <- function(x, ...) {
+  ns_0 <- paste0("模型", seq_along(x))
+  ns_1 <- names(x)
+  if (is.null(ns_1)) {
+    ns <- ns_0
+  } else {
+    ns <- ifelse(is.null(ns_1), ns_0, ns_1)
+  }
+
+  dfs <- lapply(x, publish)
+  # 记录所有的列名的
+  all_names <- unique(unlist(lapply(dfs, colnames)))
+
+  Reduce(
+    rbind,
+    Map(function(x) {x[, setdiff(all_names, names(x))] <- NA;return(x)}, dfs)
+  )
+}
+
 
 #' @rdname publish
 #' @export
 publish.desc_baseline <- function(x, digit = 2) {
-  var_names <- names(x$main)
+  var_names <- names(x$vars)
   stopifnot(length(var_names) == length(x$desc_methods))
   res_list <- list()
   for (i in seq_along(var_names)) {
     df_i <- x$main[[var_names[i]]]
     if (x$desc_methods[i] == "mean") {
-      values <- sprintf(paste0("%.", digit, "f±%.", digit, "f"), df_i$mean, df_i$std)
+      values <- paste0(
+        sprintf(paste0("%.", digit, "f"), df_i$mean),
+        "±",
+        sprintf(paste0("%.", digit, "f"), df_i$std)
+      )
+      # 如果结果中有关于分类变量的结果，我们需要多加上一列来占位，这一列是
+      # 给分类变量结果用的。
       if ("table" %in% x$desc_methods) {
         mat <- matrix(
           c(var_names[i], NA_character_, values), nrow = 1,
@@ -37,7 +64,14 @@ publish.desc_baseline <- function(x, digit = 2) {
       }
       res_list[[i]] <- as.data.frame(mat, stringsAsFactors = FALSE)
     } else if (x$desc_methods[i] == "median") {
-      values <- sprintf(paste0("%.", digit, "f (%.", digit, "f, %.", digit, "f)"), df_i$median, df_i$quan25, df_i$quan75)
+      values <- paste0(
+        sprintf(paste0("%.", digit, "f"), df_i$median),
+        "(",
+        sprintf(paste0("%.", digit, "f"), df_i$quan25),
+        ", ",
+        sprintf(paste0("%.", digit, "f"), df_i$quan75),
+        ")"
+      )
       if ("table" %in% x$desc_methods) {
         mat <- matrix(
           c(var_names[i], NA_character_, values), nrow = 1,
@@ -51,30 +85,39 @@ publish.desc_baseline <- function(x, digit = 2) {
       }
       res_list[[i]] <- as.data.frame(mat, stringsAsFactors = FALSE)
     } else if (x$desc_methods[i] == "table") {
-      if (is.data.frame(df_i)) {
-        cate_col <- rownames(df_i)
-        tib <- as.data.frame(lapply(df_i, as.character), stringsAsFactors = FALSE)
-        names(tib) <- names(df_i)
+      if (is.null(df_i$prob)) {
+        res_i <- df_i$count
       } else {
-        cate_col <- rownames(df_i$count)
-        df_list <- mapply(function(x1, x2) sprintf(paste0("%d(%.", digit, "f%%)"), x1, x2*100), df_i$count, df_i$prob)
-        tib <- as.data.frame(df_list, stringsAsFactors = FALSE)
-        names(tib) <- names(df_i$count)
+        res_i <- mapply(
+          function(count, prob) sprintf(paste0("%d(%.", digit, "f)"), count, prob * 100),
+          df_i$count, df_i$prob, SIMPLIFY = FALSE, USE.NAMES = TRUE
+        )
       }
-      var_col <- c(var_names[i], rep(NA_character_, nrow(tib)-1))
-      res_list[[i]] <- cbind(data.frame(Variable = var_col, Categories = cate_col, stringsAsFactors = FALSE), tib)
+      res_list[[i]] <- cbind(
+        data.frame(
+          Variable = c(var_names[i], rep(NA_character_, length(res_i[[1]])-1)),
+          Categories = rownames(df_i$count),
+          stringsAsFactors = FALSE
+        ),
+        as.data.frame(res_i, stringsAsFactors = FALSE, optional = TRUE)
+      )
     } else {
       stop("x$desc_methods must be one of 'mean', 'median' and 'table'.")
     }
   }
-  bind_rows(res_list)
+
+  Reduce(rbind, Map(function(x) {
+    x[, setdiff(unique(unlist(lapply(res_list, colnames))), names(x))] <- NA;
+    return(x)
+  },
+  res_list))
 }
 
 
 
 #' @rdname publish
 #' @export
-publish.stats_SingleTest <- function(x, digit = 2) {
+publish.stats_SingleTest <- function(x, digit = 2, asterisk = TRUE) {
   desc_exist <- !is.null(x$desc)
   var_names <- names(x$main)
   df_list <- list()
@@ -84,21 +127,16 @@ publish.stats_SingleTest <- function(x, digit = 2) {
       df_i[["Variable"]] <- var_names[i]
       df_list[[var_names[i]]] <- as.data.frame(df_i, stringsAsFactors = FALSE)[c("Variable", "statistic", "p_value", "method")]
     } else if (x$desc$desc_methods[i] == "table") {
-      desc_res_i <- x$desc$main[[var_names[i]]]
-      if (is.list(desc_res_i)) {
-        desc_res_i <- desc_res_i$count
-      }
-      df_i <- lapply(df_i, function(y) c(y, rep(NA, nrow(desc_res_i) - 1)))
+      nrow_desc <- nrow(x$desc$main[[var_names[i]]]$count)
+      df_i <- lapply(df_i, function(y) c(y, rep(NA, nrow_desc - 1)))
       df_list[[var_names[i]]] <- as.data.frame(df_i, stringsAsFactors = FALSE)[c("statistic", "p_value", "method")]
     } else {
       df_list[[var_names[i]]] <- as.data.frame(df_i, stringsAsFactors = FALSE)[c("statistic", "p_value", "method")]
     }
   }
-  format_res <- bind_rows(df_list)
+  format_res <- do.call(rbind, df_list)
   format_res <- as.data.frame(
-    lapply(
-      format_res, function(x) if (is.character(x)) x else sprintf(paste0("%.", digit, "f"), x)
-    ),
+    lapply(format_res, function(x) if (is.character(x)) x else sprintf(paste0("%.", digit, "f"), x)),
     stringsAsFactors = FALSE
   )
   format_res$p_value <- ifelse(
@@ -130,7 +168,7 @@ publish.stats_PairwiseTest <- function(x, digit = 2) {
       one_obj
     )
     attributes(one_obj) <- attr_obj
-    one_df <- as.data.frame(one_obj, stringsAsFactors = FALSE)
+    one_df <- as.data.frame(one_obj, stringsAsFactors = FALSE, row.names = NULL)
     names(one_df) <- colnames(one_obj)
     one_df[["method"]] <- c(x$main[[var_names[i]]]$method, rep(NA_character_, nrow(one_df) - 1))
     res[[var_names[i]]] <- cbind(data.frame(
@@ -138,7 +176,9 @@ publish.stats_PairwiseTest <- function(x, digit = 2) {
       Categories = cate_col, stringsAsFactors = FALSE), one_df
     )
   }
-  bind_rows(res)
+  res <- do.call(rbind, res)
+  rownames(res) <- NULL
+  res
 }
 
 #' @rdname publish
@@ -148,12 +188,54 @@ publish.stats_Correlation <- function(x, digit = 2) {
 
   # lower
   lower_ind <- lower.tri(res)
-  res[lower_ind] <- round2char(x[lower_ind], digit, zero_pre = "p < ", nozero_pre = "p = ")
+  round_str <- sprintf(paste0("%.", digit, "f"), x[lower_ind])
+  round_str <- ifelse(
+    round_str == paste0(c("0.", rep("0", digit)), collapse = ""),
+    paste0(c("p < 0.", rep("0", digit-1), "1"), collapse = ""),
+    paste0("p = ", round_str)
+  )
+  res[lower_ind] <- round_str
   # upper
   upper_ind <- upper.tri(res)
-  res[upper_ind] <- round2char(x[upper_ind], digit, zero_pre = "r < ", nozero_pre = "r = ")
+  round_str <- sprintf(paste0("%.", digit, "f"), x[upper_ind])
+  round_str <- ifelse(
+    round_str == paste0(c("0.", rep("0", digit)), collapse = ""),
+    paste0(c("r < 0.", rep("0", digit-1), "1"), collapse = ""),
+    paste0("r = ", round_str)
+  )
+  res[upper_ind] <- round_str
 
-  return(as.data.frame(res))
+  return(as.data.frame(res, stringsAsFactors = FALSE, optional = TRUE))
+}
+
+#' @rdname publish
+#' @export
+publish.stats_MultiTest <- function(x, digit = 2) {
+  as_charac <- function(xx) {
+    if (is.double(xx)) {
+      sprintf(paste0("%.", digit, "f"), xx)
+    } else {
+      xx
+    }
+  }
+
+  nr <- nrow(x$independent)
+  gn <- paste(names(x$goodness), sprintf(paste0("%.", digit, "f"), x$goodness), sep = "=", collapse = ",")
+  df <- as.data.frame(
+    lapply(x$independent, as_charac),
+    stringsAsFactors = FALSE, optional = TRUE
+  )
+  df[["p value"]] <- ifelse(
+    df[["p value"]] == paste0(c("0.", rep("0", digit)), collapse = ""),
+    paste0(c("<0.", rep("0", digit-1), "1"), collapse = ""),
+    df[["p value"]]
+  )
+  df <- cbind(
+    `Dependent Variable` = c(x$dependent, rep(NA_character_, nr - 2), gn),
+    df
+  )
+
+  df
 }
 
 

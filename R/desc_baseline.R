@@ -40,35 +40,57 @@
 #' @examples
 #' desc_baseline(iris, Species) %>% format(digit=2)
 desc_baseline <- function(
-  dat, group, ..., .num_desc_type = "auto", .num_margin = TRUE, .fct_margin = "none",
-  .fct_prob = "none", .check_NE_args=list()
+  dat, group, ...,
+  .num_desc_type = "auto",
+  .num_margin = TRUE,
+  .fct_margin = "row",
+  .fct_prob = "none",
+  .check_NE_args=list()
 )
 {
-  preprocess <- select_params(dat, !!enquo(group), ...)
+  preprocess <- .select_params(dat, !!enquo(group), ...)
   group <- preprocess[[1]]
   vars <- preprocess[[2]]
   .desc_baseline(
-    group, vars, .num_desc_type = .num_desc_type, .num_margin = .num_margin,
-    .fct_margin = .fct_margin, .fct_prob = .fct_prob, .check_NE_args = .check_NE_args
+    group, vars,
+    .num_desc_type = .num_desc_type,
+    .num_margin = .num_margin,
+    .fct_margin = .fct_margin,
+    .fct_prob = .fct_prob,
+    .check_NE_args = .check_NE_args
   )
 }
 
 
 .desc_baseline <- function(
-  group, vars, .num_desc_type, .num_margin, .fct_margin, .fct_prob, .check_NE_args
+  group, vars,
+  .num_desc_type,
+  .num_margin,
+  .fct_margin,
+  .fct_prob,
+  .check_NE_args
 )
 {
   .num_desc_type <- match.arg(.num_desc_type, c("auto", "mean", "median"))
-  .default_check_NE_args <- list(
-    group = group, vars = vars, .N = TRUE, .E = FALSE, .Nthre = 0.1, .Ethre = 0.1,
+  .default_check_NE_args <- list(  # 默认的check_NE的参数设置
+    group = group,
+    vars = vars,
+    .N = TRUE,
+    .E = FALSE,  # 在决定使用哪种统计描述方式的时候，不需要考虑方差齐性，只需要考虑正态性即可
+    .Nthre = 0.1,
+    .Ethre = 0.1,
     .Ntest_object = "every"
   )
   for (n in names(.check_NE_args)) {
+    if (n %in% c(".E", ".Ethre")){
+      warnings("决定统计描述方式时，不需要进行方差齐性检验！")
+      next
+    }
     .default_check_NE_args[[n]] <- .check_NE_args[[n]]
   }
   # 确定每个变量的描述方式（这里对于factor的变量，只有一种方式，所以就不需要进行check了）
   if (.num_desc_type == "auto") {
-    # 这里check的时候，只进行正态性的检验，
+    # 这里check的时候，只进行了正态性的检验，
     NE_check_res <- do.call(.check_NE, .default_check_NE_args)$logic_N
     use_methods <- rep(NA, ncol(vars))
     for (i in seq_along(vars)) {
@@ -92,14 +114,18 @@ desc_baseline <- function(
     use_methods <- sapply(vars, function(x) {if (is.factor(x)) {"table"} else {"median"}})
   }
   # 进行统计描述
-  main_res <- list()
-  for (i in seq_along(use_methods)) {
-    main_res[[names(vars)[i]]] <- switch (use_methods[i],
-      table = .desc_table(vars[[i]], group, margin = .fct_margin, prob = .fct_prob),
-      mean = .desc_mean(vars[[i]], group, margin = .num_margin),
-      median = .desc_median(vars[[i]], group, margin = .num_margin)
-    )
-  }
+  main_res <- mapply(
+    function(v, m) {
+      switch (
+        m,
+        table = .desc_table(v, group, margin = .fct_margin, prob = .fct_prob),
+        mean = .desc_me(v, group, margin = .num_margin, method = "mean"),
+        median = .desc_me(v, group, margin = .num_margin, method = "median")
+      )
+    },
+    vars, use_methods,
+    SIMPLIFY = FALSE, USE.NAMES = TRUE
+  )
 
   structure(
     list(
@@ -122,7 +148,10 @@ desc_baseline <- function(
 
   tab <- unclass(table(factor1, factor2))
   if (margin == "none" & prob == "none") {
-    return(as.data.frame(tab, stringsAsFactors = FALSE))
+    return(list(
+      count=as.data.frame(tab, stringAsFactors = FALSE),
+      prob=NULL
+    ))
   }
   if (margin == "row" | margin == "all") {
     tab <- cbind(tab, apply(tab, 1, sum))
@@ -149,58 +178,67 @@ desc_baseline <- function(
     tab_prob <- t(t(tab) / rep_len(denominator, length.out = length(tab)))
   } else if (prob == "all") {
     tab_prob <- tab / length(factor1)
+  } else {
+    tab_prob <- NULL
   }
 
   if (prob == "none") {
-    return(as.data.frame(tab, stringsAsFactors = FALSE))
+    return(list(
+      count=as.data.frame(tab, stringAsFactors = FALSE),
+      prob=NULL
+    ))
   } else {
     return(list(
       count=as.data.frame(tab, stringAsFactors = FALSE),
       prob=as.data.frame(tab_prob, stringAsFactors = FALSE)
     ))
   }
+
 }
 
-.desc_mean <- function(v, group, margin = FALSE) {
+.desc_me <- function(v, group, margin = FALSE, method = "mean") {
   stopifnot(is.factor(group))
   stopifnot(is.numeric(v))
   gl <- levels(group)
-  m <- c()
-  s <- c()
-  for (l in gl) {
-    vl <- v[group == l]
-    m <- c(m, mean(vl, na.rm = TRUE))
-    s <- c(s, sd(vl, na.rm = TRUE))
-  }
-  if (margin) {
-    gl <- c(gl, "all")
-    m <- c(m, mean(v, na.rm = TRUE))
-    s <- c(s, sd(v, na.rm = TRUE))
-  }
-  data.frame(Categories = gl, mean = m, std = s)
-}
 
-.desc_median <- function(v, group, margin = FALSE) {
-  stopifnot(is.factor(group))
-  stopifnot(is.numeric(v))
-  gl <- levels(group)
-  m <- c()
-  q1 <- c()
-  q2 <- c()
-  for (l in gl) {
-    vl <- v[group == l]
-    quans <- quantile(vl, probs = c(0.5, 0.25, 0.75), na.rm = TRUE)
-    m <- c(m, quans[1])
-    q1 <- c(q1, quans[2])
-    q2 <- c(q2, quans[3])
-  }
   if (margin) {
-    quans <- quantile(v, probs = c(0.5, 0.25, 0.75), na.rm = TRUE)
-    m <- c(m, quans[1])
-    q1 <- c(q1, quans[2])
-    q2 <- c(q2, quans[3])
+    if ("all" %in% gl) {
+      stop("all不能是group中的分类名，请将其修改！")
+    }
     gl <- c(gl, "all")
   }
-  data.frame(Categories = gl, median = m, quan25 = q1, quan75 = q2)
+
+  if (method == "mean") {
+    .func <- .f_mean_sd
+    res_colnames <- c("mean", "std")
+  } else{
+    .func <- .f_median_quan
+    res_colnames <- c("median", "quan25", "quan75")
+  }
+
+  res_mat <- t(mapply(.func, gl, MoreArgs = list(group = group, values = v)))
+  res_df <- data.frame(res_mat)
+  names(res_df) <- res_colnames
+  res_df["Categories"] <- gl
+  res_df <- res_df[c("Categories", res_colnames)]
+  return(res_df)
 }
 
+.f_mean_sd <- function(cat, group, values) {
+  if (cat == "all") {
+    values_ <- values
+  } else {
+    values_ <- values[group == cat]
+  }
+  return(c(mean(values_, na.rm = TRUE), sd(values_, na.rm = TRUE)))
+}
+
+.f_median_quan <- function(cat, group, values) {
+  if (cat == "all") {
+    values_ <- values
+  } else {
+    values_ <- values[group == cat]
+  }
+  quans <- quantile(values_, probs = c(0.5, 0.25, 0.75), na.rm = TRUE, names = FALSE)
+  return(quans)
+}

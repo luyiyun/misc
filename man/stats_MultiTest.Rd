@@ -2,19 +2,33 @@
 % Please edit documentation in R/stats_MultiTest.R
 \name{stats_MultiTest}
 \alias{stats_MultiTest}
+\alias{stats_MultiTest.formula}
+\alias{stats_MultiTest.lm}
+\alias{stats_MultiTest.glm}
+\alias{stats_MultiTest.polr}
 \title{Multiple elements Analysis for data.frame}
 \usage{
-stats_MultiTest(formula, dat, .digit = 2)
+stats_MultiTest(x, ...)
+
+\method{stats_MultiTest}{formula}(formu, dat, ...)
+
+\method{stats_MultiTest}{lm}(obj)
+
+\method{stats_MultiTest}{glm}(obj)
+
+\method{stats_MultiTest}{polr}(obj)
 }
 \arguments{
-\item{formula}{formula, like \code{glm}}
+\item{...}{other parameters for \code{lm}, \code{glm} or \code{MASS::polr}.}
 
 \item{dat}{data.frame}
 
-\item{.digit}{Integer, significant number of results retained.}
+\item{obj}{\code{lm}, \code{glm} or \code{polr} object.}
+
+\item{formula}{formula, like \code{glm}}
 }
 \value{
-tibble, the element is character
+a \code{stat_MultiTest} object.
 }
 \description{
 Multiple elements Analysis for data.frame

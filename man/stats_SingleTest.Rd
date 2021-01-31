@@ -24,8 +24,8 @@ stats_SingleTest(
 
 \item{.desc}{Logical, whether calculate \code{desc_baseline} object.}
 
-\item{.num_method}{Character, "auto", "t", "anova", "wilcox", "kwh". If \code{nlevels(group)} > 2 and "t" or
-"wilcox" are chosen, a warning will be throwed and the parameter will be replaced by "anova" or "kwh". Default
+\item{.num_method}{Character, "auto", "t", "anova", "wilcox", "kruskal". If \code{nlevels(group)} > 2 and "t" or
+"wilcox" are chosen, a warning will be throwed and the parameter will be replaced by "anova" or "kruskal". Default
 is "auto", the test method of numeric variables will be decided by \code{.check_NE}. The "t" means t test with Welch
 (or Satterthwaite) approximation of the degrees of freedom.}
 

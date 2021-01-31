@@ -37,6 +37,7 @@
 #' @seealso \code{\link{check_chisq}}
 #' @export
 #' @importFrom car leveneTest
+#' @importFrom dplyr case_when
 #'
 #' @examples
 #' check_NE(iris, Species)
@@ -47,7 +48,7 @@
 #' # test
 #' dat %>% check_NE(cyl)
 check_NE <- function(dat, group, ..., .N=TRUE, .E=TRUE, .Nthre=0.1, .Ethre=0.1, .Ntest_object="every"){
-  preprocess <- select_params(dat, !!enquo(group), ...)
+  preprocess <- .select_params(dat, !!enquo(group), ...)
   group <- preprocess[[1]]
   vars <- preprocess[[2]]
   .check_NE(group, vars, .N, .E, .Nthre, .Ethre, .Ntest_object)
@@ -67,10 +68,10 @@ check_NE <- function(dat, group, ..., .N=TRUE, .E=TRUE, .Nthre=0.1, .Ethre=0.1, 
     N_ncol <- 1
     N_colname <- "total"
   } else if (.Ntest_object == "every") {
-    N_ncol <- nlevels(group)
+    N_ncol <- g_nlevel
     N_colname <- glevels
   } else {
-    N_ncol <- nlevels(group) + 1
+    N_ncol <- g_nlevel + 1
     N_colname <- c(glevels, "total")
   }
   res <- structure(
@@ -88,8 +89,7 @@ check_NE <- function(dat, group, ..., .N=TRUE, .E=TRUE, .Nthre=0.1, .Ethre=0.1, 
   )
 
   if (.N) {
-    res$pvalue_N <- matrix(NA, nrow = ncol(vars), ncol = N_ncol,
-                           dimnames = list(names(vars), N_colname))
+    res$pvalue_N <- matrix(NA, nrow = ncol(vars), ncol = N_ncol, dimnames = list(names(vars), N_colname))
     for (i in seq_along(vars)) {
       v <- vars[[i]]
       if (!is.numeric(v)) next
@@ -126,24 +126,24 @@ check_NE <- function(dat, group, ..., .N=TRUE, .E=TRUE, .Nthre=0.1, .Ethre=0.1, 
       logic_N & (!res$logic_E) & (g_nlevel == 2) ~ "welch",
       logic_N & (!res$logic_E) & (g_nlevel > 2) ~ "anova",  # 暂时没有找到更加合适的方法
       !logic_N & (g_nlevel == 2) ~ "wilcox",
-      !logic_N ~ "kruskal"
+      TRUE ~ "kruskal"  # !logic_N，只剩下不是正态的情况了
     )
   } else if (.N) {
     logic_N <- apply(res$logic_N, 1, all)
     res$methods <- case_when(
       is.na(logic_N) ~ NA_character_,
-      logic_N & (g_nlevel == 2) ~ "welch",
+      logic_N & (g_nlevel == 2) ~ "welch",  # 这里为了保险，对于所有的正态情况都使用welch t检验
       logic_N & (g_nlevel > 2) ~ "anova",
       !logic_N & (g_nlevel == 2) ~ "wilcox",
-      !logic_N ~ "kruskal"
+      TRUE ~ "kruskal"  # !logic_N，只剩下不是正态的情况了
     )
   } else {
     if (g_nlevel == 2) {
-      res$methods <- ifelse(is.na(res$logic_E), NA_character_, "welch")
+      res$methods <- ifelse(is.na(res$logic_E), NA_character_, "welch")  # 这里为了保险，对于所有的方差齐情况都使用welch t检验
     } else {
       res$methods <- case_when(
         is.na(res$logic_E) ~ NA_character_,
-        logic_E ~ "anova",
+        res$logic_E ~ "anova",
         TRUE ~ "kruskal"
       )
     }

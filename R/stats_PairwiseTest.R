@@ -35,11 +35,14 @@ stats_PairwiseTest <- function(x, ...) {
 #' @describeIn stats_PairwiseTest Pairwise Test for data.frame.
 #' @export
 stats_PairwiseTest.data.frame <- function(
-  dat, group, ..., .num_method = "auto", .fct_method = "auto",
-  .adjust_method = "holm", .check_NE_args = list()
+  dat, group, ...,
+  .num_method = "auto",
+  .fct_method = "auto",
+  .adjust_method = "holm",
+  .check_NE_args = list()
 )
 {
-  preprocess <- select_params(dat, !!enquo(group), ...)
+  preprocess <- .select_params(dat, !!enquo(group), ...)
   group <- preprocess[[1]]
   vars <- preprocess[[2]]
   .stats_PairwiseTest(vars, group, .num_method, .fct_method, .adjust_method, .check_NE_args)
@@ -53,16 +56,20 @@ stats_PairwiseTest.data.frame <- function(
 #' @export
 stats_PairwiseTest.stats_SingleTest <- function(x, .adjust_method = "holm", .just_for_sign = FALSE, .sign_thre = 0.05)
 {
+  if (nlevels(x$group) <= 2) {
+    stop("The nlevels of group variable must be greater than 2.")
+  }
   var_names <- names(x$vars)
+  use_names <- c()
+  use_methods <- c()
   if (.just_for_sign) {
-    use_names <- c()
-    use_methods <- c()
     for (n in var_names) {
       if (x$main[[n]]$p_value < .sign_thre) {
         use_names <- c(use_names, n)
         use_methods <- c(
           use_methods,
-          switch (x$main[[n]]$method,
+          switch(
+            x$main[[n]]$method,
             anova = "tukey",
             kruskal = "wilcox",
             chisq = "chisq",
@@ -93,7 +100,13 @@ stats_PairwiseTest.stats_SingleTest <- function(x, .adjust_method = "holm", .jus
 }
 
 
-.stats_PairwiseTest <- function(vars, group, .num_method, .fct_method, .adjust_method="holm", .check_NE_args = list()) {
+.stats_PairwiseTest <- function(
+  vars, group,
+  .num_method,
+  .fct_method,
+  .adjust_method="holm",
+  .check_NE_args = list()
+) {
 
   if (nlevels(group) <= 2) {
     stop("The nlevels of group variable must be greater than 2.")
@@ -107,7 +120,12 @@ stats_PairwiseTest.stats_SingleTest <- function(x, .adjust_method = "holm", .jus
   .num_method <- match.arg(.num_method, all_num_methods)
   .fct_method <- match.arg(.fct_method, all_num_methods)
   .default_check_NE_args <- list(
-    group = group, vars = vars, .N = TRUE, .E = TRUE, .Nthre = 0.1, .Ethre = 0.1,
+    group = group,
+    vars = vars,
+    .N = TRUE,
+    .E = TRUE,
+    .Nthre = 0.1,
+    .Ethre = 0.1,
     .Ntest_object = "every"
   )
   for (n in names(.check_NE_args)) {
@@ -124,11 +142,7 @@ stats_PairwiseTest.stats_SingleTest <- function(x, .adjust_method = "holm", .jus
       TRUE ~ use_methods
     )
   } else {
-    for (i in seq_along(use_methods)) {
-      if (is.numeric(vars[[i]])) {
-        use_methods[i] <- .num_method
-      }
-    }
+    use_methods <- ifelse(sapply(vars, is.numeric), .num_method, use_methods)
   }
   if (.fct_method == "auto") {
     fct_methods <- .check_chisq(group, vars)$methods
@@ -138,11 +152,7 @@ stats_PairwiseTest.stats_SingleTest <- function(x, .adjust_method = "holm", .jus
       TRUE ~ use_methods
     )
   } else {
-    for (i in seq_along(use_methods)) {
-      if (is.factor(vars[[i]])) {
-        use_methods[i] <- .fct_method
-      }
-    }
+    use_methods <- ifelse(sapply(vars, is.numeric), .fct_method, use_methods)
   }
 
   # 进行检验
@@ -150,20 +160,20 @@ stats_PairwiseTest.stats_SingleTest <- function(x, .adjust_method = "holm", .jus
 }
 
 .stats_PairwiseTest_ <- function(vars, group, use_methods, adjust_method) {
-
   var_names <- names(vars)
   # 每个变量使用其最适合的方法进行统计检验
   res <- list()
   for (i in seq_len(ncol(vars))) {
     v <- vars[[i]]
-    res[[var_names[i]]] <- switch(use_methods[i],
-                  tukey = pairwise_tukey(v, group),
-                  t = pairwise_t(v, group, adjust_method),
-                  wilcox = pairwise_wilcox(v, group, adjust_method),
-                  chisq = pairwise_chisq(v, group, adjust_method),
-                  fisher = pairwise_fisher(v, group, adjust_method))
+    res[[var_names[i]]] <- switch(
+      use_methods[i],
+      tukey = pairwise_tukey(v, group),
+      t = pairwise_t(v, group, adjust_method),
+      wilcox = pairwise_wilcox(v, group, adjust_method),
+      chisq = pairwise_chisq(v, group, adjust_method),
+      fisher = pairwise_fisher(v, group, adjust_method)
+    )
   }
-
   structure(
     list(
       main = res,
@@ -185,9 +195,14 @@ pairwise_tukey <- function(v, group) {
   index <- strsplit(index, "-")
 
   gl <- levels(group)
+  ngl <- length(gl)
   res_list <- list(method = "tukey")
   for (i in seq_len(ncol(tukey_res))) {
-    mat <- matrix(nrow = nlevels(group)-1, ncol = nlevels(group)-1, dimnames = list(gl[-1], gl[-nlevels(group)]))
+    mat <- matrix(
+      nrow = ngl-1,
+      ncol = ngl-1,
+      dimnames = list(gl[-1], gl[-ngl])
+    )
     for (j in seq_len(nrow(tukey_res))) {
       mat[index[[j]][1], index[[j]][2]] <- tukey_res[j, i]
     }

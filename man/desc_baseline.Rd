@@ -10,7 +10,7 @@ desc_baseline(
   ...,
   .num_desc_type = "auto",
   .num_margin = TRUE,
-  .fct_margin = "none",
+  .fct_margin = "row",
   .fct_prob = "none",
   .check_NE_args = list()
 )
